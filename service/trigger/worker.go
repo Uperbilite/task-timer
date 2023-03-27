@@ -1,0 +1,153 @@
+package trigger
+
+import (
+	"context"
+	"fmt"
+	"github.com/uperbilite/task-timer/common/conf"
+	"github.com/uperbilite/task-timer/common/model/vo"
+	"github.com/uperbilite/task-timer/common/utils"
+	"github.com/uperbilite/task-timer/pkg/concurrency"
+	"github.com/uperbilite/task-timer/pkg/pool"
+	"github.com/uperbilite/task-timer/service/executor"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+type taskService interface {
+	GetTasksByTime(ctx context.Context, key string, bucket int, start, end time.Time) ([]*vo.Task, error)
+}
+
+type confProvider interface {
+	Get() *conf.TriggerAppConf
+}
+
+type Worker struct {
+	task         taskService
+	confProvider confProvider
+	pool         pool.WorkerPool
+	executor     *executor.Worker
+}
+
+func NewWorker(executor *executor.Worker, task *TaskService, confProvider *conf.TriggerAppConfProvider) *Worker {
+	return &Worker{
+		executor:     executor,
+		task:         task,
+		pool:         pool.NewGoWorkerPool(confProvider.Get().WorkersNum),
+		confProvider: confProvider,
+	}
+}
+
+func (w *Worker) Start(ctx context.Context) {
+	w.executor.Start(ctx)
+}
+
+func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) error {
+	// 进行为时一分钟的 zrange 处理
+	startTime, err := getStartMinute(minuteBucketKey)
+	if err != nil {
+		return err
+	}
+	endTime := startTime.Add(time.Minute)
+
+	config := w.confProvider.Get()
+
+	ticker := time.NewTicker(time.Duration(config.ZRangeGapSeconds) * time.Second)
+	defer ticker.Stop()
+
+	size := int(time.Minute/(time.Duration(config.ZRangeGapSeconds)*time.Second)) + 1
+	notifier := concurrency.NewSafeChan(size)
+	defer notifier.Close()
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second)); err != nil {
+			notifier.Put(err)
+		}
+	}()
+
+	for range ticker.C {
+		select {
+		case e := <-notifier.GetChan():
+			err, _ = e.(error)
+			return err
+		default:
+		}
+
+		if startTime = startTime.Add(time.Duration(config.ZRangeGapSeconds) * time.Second); startTime.Equal(endTime) || startTime.After(endTime) {
+			break
+		}
+
+		wg.Add(1)
+		go func(startTime time.Time) {
+			defer wg.Done()
+			if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second)); err != nil {
+				notifier.Put(err)
+			}
+		}(startTime)
+	}
+
+	wg.Wait()
+
+	select {
+	case e := <-notifier.GetChan():
+		err, _ = e.(error)
+		return err
+	default:
+	}
+
+	// 延长锁的过期时间用于真正执行任务
+	ack()
+
+	return nil
+}
+
+func (w *Worker) handleBatch(ctx context.Context, key string, start, end time.Time) error {
+	bucket, err := getBucket(key)
+	if err != nil {
+		return err
+	}
+
+	tasks, err := w.task.GetTasksByTime(ctx, key, bucket, start, end)
+	if err != nil {
+		return err
+	}
+
+	timerIDs := make([]uint, 0, len(tasks))
+	for _, task := range tasks {
+		timerIDs = append(timerIDs, task.TimerID)
+	}
+
+	for _, task := range tasks {
+		task := task
+		if err := w.pool.Submit(func() {
+			w.executor.Work(ctx, utils.UnionTimerIDUnix(task.TimerID, task.RunTimer.UnixMilli()))
+			// TODO: err handle
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getStartMinute(slice string) (time.Time, error) {
+	timeBucket := strings.Split(slice, "_")
+	if len(timeBucket) != 2 {
+		return time.Time{}, fmt.Errorf("invalid format of msg key: %s", slice)
+	}
+
+	return utils.GetStartMinute(timeBucket[0])
+}
+
+func getBucket(slice string) (int, error) {
+	timeBucket := strings.Split(slice, "_")
+	if len(timeBucket) != 2 {
+		return -1, fmt.Errorf("invalid format of msg key: %s", slice)
+	}
+	return strconv.Atoi(timeBucket[1])
+}
