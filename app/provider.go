@@ -2,6 +2,8 @@ package app
 
 import (
 	"github.com/uperbilite/task-timer/app/migrator"
+	"github.com/uperbilite/task-timer/app/monitor"
+	"github.com/uperbilite/task-timer/pkg/promethus"
 	"go.uber.org/dig"
 
 	"github.com/uperbilite/task-timer/app/scheduler"
@@ -17,6 +19,7 @@ import (
 	"github.com/uperbilite/task-timer/pkg/xhttp"
 	executorservice "github.com/uperbilite/task-timer/service/executor"
 	migratorservice "github.com/uperbilite/task-timer/service/migrator"
+	monitorservice "github.com/uperbilite/task-timer/service/monitor"
 	schedulerservice "github.com/uperbilite/task-timer/service/scheduler"
 	triggerservice "github.com/uperbilite/task-timer/service/trigger"
 	webservice "github.com/uperbilite/task-timer/service/webserver"
@@ -53,6 +56,7 @@ func providePKG(c *dig.Container) {
 	c.Provide(mysql.GetClient)
 	c.Provide(cron.NewCronParser)
 	c.Provide(xhttp.NewJSONClient)
+	c.Provide(promethus.GetReporter)
 }
 
 func provideDAO(c *dig.Container) {
@@ -71,6 +75,7 @@ func provideService(c *dig.Container) {
 	c.Provide(triggerservice.NewWorker)
 	c.Provide(triggerservice.NewTaskService)
 	c.Provide(schedulerservice.NewWorker)
+	c.Provide(monitorservice.NewWorker)
 }
 
 func provideApp(c *dig.Container) {
@@ -79,6 +84,7 @@ func provideApp(c *dig.Container) {
 	c.Provide(webserver.NewTimerApp)
 	c.Provide(webserver.NewServer)
 	c.Provide(scheduler.NewWorkerApp)
+	c.Provide(monitor.NewMonitorApp)
 }
 
 func GetSchedulerApp() *scheduler.WorkerApp {
@@ -109,4 +115,14 @@ func GetMigratorApp() *migrator.MigratorApp {
 		panic(err)
 	}
 	return migratorApp
+}
+
+func GetMonitorApp() *monitor.MonitorApp {
+	var monitorApp *monitor.MonitorApp
+	if err := container.Invoke(func(_m *monitor.MonitorApp) {
+		monitorApp = _m
+	}); err != nil {
+		panic(err)
+	}
+	return monitorApp
 }
