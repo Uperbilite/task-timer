@@ -26,6 +26,7 @@ func init() {
 		panic(err)
 	}
 
+	defaultMigratorAppConfProvider = NewMigratorAppConfProvider(gConf.Migrator)
 	defaultMysqlConfProvider = NewMysqlConfProvider(gConf.Mysql)
 	defaultRedisConfProvider = NewRedisConfigProvider(gConf.Redis)
 	defaultTriggerAppConfProvider = NewTriggerAppConfProvider(gConf.Trigger)
@@ -35,6 +36,18 @@ func init() {
 
 // 兜底配置
 var gConf = GlobalConf{
+	Migrator: &MigratorAppConf{
+		// 单节点并行协程数
+		WorkersNum: 1000,
+		// 每次迁移数据的时间间隔，单位：min
+		MigrateStepMinutes: 60,
+		// 迁移成功更新的锁过期时间，单位：min
+		MigrateSuccessExpireMinutes: 120,
+		// 迁移器获取锁时，初设的过期时间，单位：min
+		MigrateTryLockMinutes: 20,
+		// 迁移器提前将定时器数据缓存到内存中的保存时间，单位：min
+		TimerDetailCacheMinutes: 2,
+	},
 	Scheduler: &SchedulerAppConf{
 		// 单节点并行协程数
 		WorkersNum: 100,
@@ -74,6 +87,7 @@ var gConf = GlobalConf{
 }
 
 type GlobalConf struct {
+	Migrator  *MigratorAppConf  `yaml:"migrator"`
 	Mysql     *MySQLConfig      `yaml:"mysql"`
 	Redis     *RedisConfig      `yaml:"redis"`
 	Trigger   *TriggerAppConf   `yaml:"trigger"`

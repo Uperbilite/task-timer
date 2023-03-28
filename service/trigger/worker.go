@@ -117,11 +117,6 @@ func (w *Worker) handleBatch(ctx context.Context, key string, start, end time.Ti
 		return err
 	}
 
-	timerIDs := make([]uint, 0, len(tasks))
-	for _, task := range tasks {
-		timerIDs = append(timerIDs, task.TimerID)
-	}
-
 	for _, task := range tasks {
 		task := task
 		if err := w.pool.Submit(func() {

@@ -10,9 +10,11 @@ import (
 )
 
 func main() {
+	migratorApp := app.GetMigratorApp()
 	schedulerApp := app.GetSchedulerApp()
 	webServer := app.GetWebServer()
 
+	migratorApp.Start()
 	schedulerApp.Start()
 	defer schedulerApp.Stop()
 

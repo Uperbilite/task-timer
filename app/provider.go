@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/uperbilite/task-timer/app/migrator"
 	"go.uber.org/dig"
 
 	"github.com/uperbilite/task-timer/app/scheduler"
@@ -15,6 +16,7 @@ import (
 	"github.com/uperbilite/task-timer/pkg/redis"
 	"github.com/uperbilite/task-timer/pkg/xhttp"
 	executorservice "github.com/uperbilite/task-timer/service/executor"
+	migratorservice "github.com/uperbilite/task-timer/service/migrator"
 	schedulerservice "github.com/uperbilite/task-timer/service/scheduler"
 	triggerservice "github.com/uperbilite/task-timer/service/trigger"
 	webservice "github.com/uperbilite/task-timer/service/webserver"
@@ -40,6 +42,7 @@ func provideConfig(c *dig.Container) {
 	c.Provide(conf.DefaultTriggerAppConfProvider)
 	c.Provide(conf.DefaultWebServerAppConfProvider)
 	c.Provide(conf.DefaultRedisConfigProvider)
+	c.Provide(conf.DefaultMigratorAppConfProvider)
 }
 
 func providePKG(c *dig.Container) {
@@ -59,6 +62,8 @@ func provideDAO(c *dig.Container) {
 }
 
 func provideService(c *dig.Container) {
+	c.Provide(migratorservice.NewWorker)
+	c.Provide(migratorservice.NewWorker)
 	c.Provide(webservice.NewTaskService)
 	c.Provide(webservice.NewTimerService)
 	c.Provide(executorservice.NewTimerService)
@@ -69,6 +74,7 @@ func provideService(c *dig.Container) {
 }
 
 func provideApp(c *dig.Container) {
+	c.Provide(migrator.NewMigratorApp)
 	c.Provide(webserver.NewTaskApp)
 	c.Provide(webserver.NewTimerApp)
 	c.Provide(webserver.NewServer)
@@ -93,4 +99,14 @@ func GetWebServer() *webserver.Server {
 		panic(err)
 	}
 	return server
+}
+
+func GetMigratorApp() *migrator.MigratorApp {
+	var migratorApp *migrator.MigratorApp
+	if err := container.Invoke(func(_m *migrator.MigratorApp) {
+		migratorApp = _m
+	}); err != nil {
+		panic(err)
+	}
+	return migratorApp
 }
