@@ -11,15 +11,6 @@ import (
 	"github.com/uperbilite/task-timer/service/trigger"
 )
 
-// 声明成接口
-type appConfProvider interface {
-	Get() *conf.SchedulerAppConf
-}
-
-type lockService interface {
-	GetDistributionLock(key string) redis.DistributeLocker
-}
-
 type Worker struct {
 	pool            pool.WorkerPool
 	appConfProvider appConfProvider
@@ -68,7 +59,7 @@ func (w *Worker) getValidBucket(ctx context.Context) int {
 
 func (w *Worker) handleSlice(ctx context.Context, bucketID int) {
 	now := time.Now()
-	// 为了防止延长锁过期时间失败，开启另一个协程处理前一个分片的任务
+	// 为了防止延长锁过期时间失败，开启另一个x
 	if err := w.pool.Submit(func() {
 		w.asyncHandleSlice(ctx, now.Add(-time.Minute), bucketID)
 	}); err != nil {
@@ -85,20 +76,22 @@ func (w *Worker) asyncHandleSlice(ctx context.Context, t time.Time, bucketID int
 	// 设置锁过期时间
 	locker := w.lockService.GetDistributionLock(utils.GetTimeBucketLockKey(t, bucketID))
 	if err := locker.Lock(ctx, int64(w.appConfProvider.Get().TryLockSeconds)); err != nil {
-		// TODO: log
 		return
 	}
 
-	// TODO: log
-
 	// 延长锁过期时间
 	ack := func() {
-		if err := locker.ExpireLock(ctx, int64(w.appConfProvider.Get().SuccessExpireSeconds)); err != nil {
-			// TODO: log
-		}
+		locker.ExpireLock(ctx, int64(w.appConfProvider.Get().SuccessExpireSeconds))
 	}
 
-	if err := w.trigger.Work(ctx, utils.GetSliceMsgKey(t, bucketID), ack); err != nil {
-		// TODO: log
-	}
+	w.trigger.Work(ctx, utils.GetSliceMsgKey(t, bucketID), ack)
+}
+
+// 声明成接口d
+type appConfProvider interface {
+	Get() *conf.SchedulerAppConf
+}
+
+type lockService interface {
+	GetDistributionLock(key string) redis.DistributeLocker
 }

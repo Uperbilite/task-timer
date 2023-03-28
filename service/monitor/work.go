@@ -8,7 +8,7 @@ import (
 	"github.com/uperbilite/task-timer/common/utils"
 	taskdao "github.com/uperbilite/task-timer/dao/task"
 	timerdao "github.com/uperbilite/task-timer/dao/timer"
-	"github.com/uperbilite/task-timer/pkg/promethus"
+	"github.com/uperbilite/task-timer/pkg/prometheus"
 	"github.com/uperbilite/task-timer/pkg/redis"
 )
 
@@ -16,10 +16,10 @@ type Worker struct {
 	lockService *redis.Client
 	taskDAO     *taskdao.TaskDAO
 	timerDAO    *timerdao.TimerDAO
-	reporter    *promethus.Reporter
+	reporter    *prometheus.Reporter
 }
 
-func NewWorker(taskDAO *taskdao.TaskDAO, timerDAO *timerdao.TimerDAO, lockService *redis.Client, reporter *promethus.Reporter) *Worker {
+func NewWorker(taskDAO *taskdao.TaskDAO, timerDAO *timerdao.TimerDAO, lockService *redis.Client, reporter *prometheus.Reporter) *Worker {
 	return &Worker{
 		taskDAO:     taskDAO,
 		timerDAO:    timerDAO,

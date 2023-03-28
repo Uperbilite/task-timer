@@ -26,6 +26,12 @@ func WithStatus(status int32) Option {
 	}
 }
 
+func WithAsc() Option {
+	return func(d *gorm.DB) *gorm.DB {
+		return d.Order("created_at ASC")
+	}
+}
+
 func WithDesc() Option {
 	return func(d *gorm.DB) *gorm.DB {
 		return d.Order("created_at DESC")

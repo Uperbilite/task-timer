@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"github.com/uperbilite/task-timer/common/conf"
 	"sync"
 	"time"
 
@@ -12,25 +13,22 @@ import (
 	timerdao "github.com/uperbilite/task-timer/dao/timer"
 )
 
-type timerDAO interface {
-	GetTimer(context.Context, ...timerdao.Option) (*po.Timer, error)
-	GetTimers(ctx context.Context, opts ...timerdao.Option) ([]*po.Timer, error)
-}
-
 type TimerService struct {
 	sync.Once
-	ctx      context.Context
-	stop     func()
-	timers   map[uint]*vo.Timer
-	timerDAO timerDAO
-	taskDAO  *taskdao.TaskDAO
+	confProvider *conf.MigratorAppConfProvider
+	ctx          context.Context
+	stop         func()
+	timers       map[uint]*vo.Timer
+	timerDAO     timerDAO
+	taskDAO      *taskdao.TaskDAO
 }
 
-func NewTimerService(timerDAO *timerdao.TimerDAO, taskDAO *taskdao.TaskDAO) *TimerService {
+func NewTimerService(timerDAO *timerdao.TimerDAO, taskDAO *taskdao.TaskDAO, confProvider *conf.MigratorAppConfProvider) *TimerService {
 	return &TimerService{
-		timers:   make(map[uint]*vo.Timer),
-		timerDAO: timerDAO,
-		taskDAO:  taskDAO,
+		confProvider: confProvider,
+		timers:       make(map[uint]*vo.Timer),
+		timerDAO:     timerDAO,
+		taskDAO:      taskDAO,
 	}
 }
 
@@ -39,8 +37,7 @@ func (t *TimerService) Start(ctx context.Context) {
 		go func() {
 			t.ctx, t.stop = context.WithCancel(ctx)
 
-			// TODO: set step minutes in config
-			stepMinutes := 2
+			stepMinutes := t.confProvider.Get().TimerDetailCacheMinutes
 			ticker := time.NewTicker(time.Duration(stepMinutes) * time.Minute)
 			defer ticker.Stop()
 
@@ -122,4 +119,9 @@ func (t *TimerService) GetTimer(ctx context.Context, id uint) (*vo.Timer, error)
 
 func (t *TimerService) Stop() {
 	t.stop()
+}
+
+type timerDAO interface {
+	GetTimer(context.Context, ...timerdao.Option) (*po.Timer, error)
+	GetTimers(ctx context.Context, opts ...timerdao.Option) ([]*po.Timer, error)
 }

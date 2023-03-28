@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/uperbilite/task-timer/pkg/prometheus"
 	nethttp "net/http"
 	"strings"
 	"time"
@@ -21,14 +22,16 @@ type Worker struct {
 	taskDAO      *taskdao.TaskDAO
 	httpClient   *xhttp.JSONClient
 	bloomFilter  *bloom.Filter
+	reporter     *prometheus.Reporter
 }
 
-func NewWorker(timerService *TimerService, taskDAO *taskdao.TaskDAO, httpClient *xhttp.JSONClient, bloomFilter *bloom.Filter) *Worker {
+func NewWorker(timerService *TimerService, taskDAO *taskdao.TaskDAO, httpClient *xhttp.JSONClient, bloomFilter *bloom.Filter, reporter *prometheus.Reporter) *Worker {
 	return &Worker{
 		timerService: timerService,
 		taskDAO:      taskDAO,
 		httpClient:   httpClient,
 		bloomFilter:  bloomFilter,
+		reporter:     reporter,
 	}
 }
 
@@ -95,6 +98,8 @@ func (w *Worker) execute(ctx context.Context, timer *vo.Timer) (map[string]inter
 }
 
 func (w *Worker) postProcess(ctx context.Context, resp map[string]interface{}, execErr error, app string, timerID uint, unix int64, execTime time.Time) error {
+	go w.reportMonitorData(app, unix, execTime)
+
 	w.bloomFilter.Set(ctx, utils.GetTaskBloomFilterKey(utils.GetDayStr(time.UnixMilli(unix))), utils.UnionTimerIDUnix(timerID, unix), consts.BloomFilterKeyExpireSeconds)
 
 	task, err := w.taskDAO.GetTask(ctx, taskdao.WithTimerID(timerID), taskdao.WithRunTimer(time.UnixMilli(unix)))
@@ -112,4 +117,10 @@ func (w *Worker) postProcess(ctx context.Context, resp map[string]interface{}, e
 	}
 
 	return w.taskDAO.UpdateTask(ctx, task)
+}
+
+func (w *Worker) reportMonitorData(app string, expectExecTimeUnix int64, acutalExecTime time.Time) {
+	w.reporter.ReportExecRecord(app)
+	// 上报毫秒
+	w.reporter.ReportTimerDelayRecord(app, float64(acutalExecTime.UnixMilli()-expectExecTimeUnix))
 }

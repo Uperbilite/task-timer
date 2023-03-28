@@ -22,27 +22,26 @@ import (
 const defaultEnableGapSeconds = 3
 
 type TimerService struct {
-	dao          timerDAO
-	confProvider confProvider
-	cronParser   cronParser
-	taskCache    taskCache
-	lockService  *redis.Client
+	dao                 timerDAO
+	migrateConfProvider *conf.MigratorAppConfProvider
+	cronParser          cronParser
+	taskCache           taskCache
+	lockService         *redis.Client
 }
 
 func NewTimerService(dao *timerdao.TimerDAO, taskCache *taskdao.TaskCache, lockService *redis.Client,
-	confProvider *conf.WebServerAppConfProvider, parser *cron.CronParser) *TimerService {
+	migrateConfProvider *conf.MigratorAppConfProvider, parser *cron.CronParser) *TimerService {
 	return &TimerService{
-		dao:          dao,
-		confProvider: confProvider,
-		taskCache:    taskCache,
-		cronParser:   parser,
-		lockService:  lockService,
+		dao:                 dao,
+		migrateConfProvider: migrateConfProvider,
+		taskCache:           taskCache,
+		cronParser:          parser,
+		lockService:         lockService,
 	}
 }
 
 func (t *TimerService) CreateTimer(ctx context.Context, timer *vo.Timer) (uint, error) {
 	lock := t.lockService.GetDistributionLock(utils.GetCreateTimerLockKey(timer.App))
-
 	if err := lock.Lock(ctx, defaultEnableGapSeconds); err != nil {
 		return 0, errors.New("创建/删除操作过于频繁，请稍后再试！")
 	}
@@ -99,11 +98,9 @@ func (t *TimerService) EnableTimer(ctx context.Context, app string, id uint) err
 		// 取得批量的执行时机
 		// end 为下两个切片的右边界
 		start := time.Now()
-		migrateStepMinutes := 60
-		end := utils.GetForwardTwoMigrateStepEnd(start, 2*time.Duration(migrateStepMinutes)*time.Minute)
+		end := utils.GetForwardTwoMigrateStepEnd(start, 2*time.Duration(t.migrateConfProvider.Get().MigrateStepMinutes)*time.Minute)
 		executeTimes, err := t.cronParser.NextsBefore(timer.Cron, end)
 		if err != nil {
-			// TODO: log err
 			return err
 		}
 

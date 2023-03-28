@@ -48,6 +48,7 @@ var gConf = GlobalConf{
 		// 迁移器提前将定时器数据缓存到内存中的保存时间，单位：min
 		TimerDetailCacheMinutes: 2,
 	},
+
 	Scheduler: &SchedulerAppConf{
 		// 单节点并行协程数
 		WorkersNum: 100,
@@ -60,15 +61,18 @@ var gConf = GlobalConf{
 		// 时间片执行成功后，更新的分布式锁时间，单位：s
 		SuccessExpireSeconds: 130,
 	},
+
 	Trigger: &TriggerAppConf{
 		// 触发器轮询定时任务 zset 的时间间隔，单位：s
 		ZRangeGapSeconds: 1,
 		// 并发协程数
 		WorkersNum: 10000,
 	},
+
 	WebServer: &WebServerAppConf{
 		Port: 8092,
 	},
+
 	Redis: &RedisConfig{
 		Network: "tcp",
 		// 最大空闲连接数
@@ -80,6 +84,7 @@ var gConf = GlobalConf{
 		// 当连接数达到上限时，新的请求是等待还是立即报错
 		Wait: true,
 	},
+
 	Mysql: &MySQLConfig{
 		MaxOpenConns: 100,
 		MaxIdleConns: 50,

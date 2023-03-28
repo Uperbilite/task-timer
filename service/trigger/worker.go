@@ -15,14 +15,6 @@ import (
 	"time"
 )
 
-type taskService interface {
-	GetTasksByTime(ctx context.Context, key string, bucket int, start, end time.Time) ([]*vo.Task, error)
-}
-
-type confProvider interface {
-	Get() *conf.TriggerAppConf
-}
-
 type Worker struct {
 	task         taskService
 	confProvider confProvider
@@ -51,12 +43,12 @@ func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) e
 	}
 	endTime := startTime.Add(time.Minute)
 
-	config := w.confProvider.Get()
+	conf := w.confProvider.Get()
 
-	ticker := time.NewTicker(time.Duration(config.ZRangeGapSeconds) * time.Second)
+	ticker := time.NewTicker(time.Duration(conf.ZRangeGapSeconds) * time.Second)
 	defer ticker.Stop()
 
-	size := int(time.Minute/(time.Duration(config.ZRangeGapSeconds)*time.Second)) + 1
+	size := int(time.Minute/(time.Duration(conf.ZRangeGapSeconds)*time.Second)) + 1
 	notifier := concurrency.NewSafeChan(size)
 	defer notifier.Close()
 
@@ -65,7 +57,7 @@ func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) e
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second)); err != nil {
+		if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(conf.ZRangeGapSeconds)*time.Second)); err != nil {
 			notifier.Put(err)
 		}
 	}()
@@ -78,14 +70,14 @@ func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) e
 		default:
 		}
 
-		if startTime = startTime.Add(time.Duration(config.ZRangeGapSeconds) * time.Second); startTime.Equal(endTime) || startTime.After(endTime) {
+		if startTime = startTime.Add(time.Duration(conf.ZRangeGapSeconds) * time.Second); startTime.Equal(endTime) || startTime.After(endTime) {
 			break
 		}
 
 		wg.Add(1)
 		go func(startTime time.Time) {
 			defer wg.Done()
-			if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second)); err != nil {
+			if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(conf.ZRangeGapSeconds)*time.Second)); err != nil {
 				notifier.Put(err)
 			}
 		}(startTime)
@@ -121,7 +113,6 @@ func (w *Worker) handleBatch(ctx context.Context, key string, start, end time.Ti
 		task := task
 		if err := w.pool.Submit(func() {
 			w.executor.Work(ctx, utils.UnionTimerIDUnix(task.TimerID, task.RunTimer.UnixMilli()))
-			// TODO: err handle
 		}); err != nil {
 			return err
 		}
@@ -145,4 +136,12 @@ func getBucket(slice string) (int, error) {
 		return -1, fmt.Errorf("invalid format of msg key: %s", slice)
 	}
 	return strconv.Atoi(timeBucket[1])
+}
+
+type taskService interface {
+	GetTasksByTime(ctx context.Context, key string, bucket int, start, end time.Time) ([]*vo.Task, error)
+}
+
+type confProvider interface {
+	Get() *conf.TriggerAppConf
 }

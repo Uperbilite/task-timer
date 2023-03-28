@@ -58,6 +58,17 @@ func (t *TimerDAO) Count(ctx context.Context, opts ...Option) (int64, error) {
 	return cnt, db.Debug().Count(&cnt).Error
 }
 
+func (t *TimerDAO) Transaction(ctx context.Context, do func(ctx context.Context, dao *TimerDAO) error) error {
+	return t.client.Transaction(func(tx *gorm.DB) error {
+		defer func() {
+			if err := recover(); err != nil {
+				tx.Rollback()
+			}
+		}()
+		return do(ctx, NewTimerDAO(mysql.NewClient(tx)))
+	})
+}
+
 func (t *TimerDAO) BatchCreateRecords(ctx context.Context, tasks []*po.Task) error {
 	return t.client.DB.Model(&po.Task{}).WithContext(ctx).CreateInBatches(tasks, len(tasks)).Error
 }

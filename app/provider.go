@@ -3,7 +3,7 @@ package app
 import (
 	"github.com/uperbilite/task-timer/app/migrator"
 	"github.com/uperbilite/task-timer/app/monitor"
-	"github.com/uperbilite/task-timer/pkg/promethus"
+	"github.com/uperbilite/task-timer/pkg/prometheus"
 	"go.uber.org/dig"
 
 	"github.com/uperbilite/task-timer/app/scheduler"
@@ -56,7 +56,7 @@ func providePKG(c *dig.Container) {
 	c.Provide(mysql.GetClient)
 	c.Provide(cron.NewCronParser)
 	c.Provide(xhttp.NewJSONClient)
-	c.Provide(promethus.GetReporter)
+	c.Provide(prometheus.GetReporter)
 }
 
 func provideDAO(c *dig.Container) {

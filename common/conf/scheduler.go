@@ -1,8 +1,7 @@
 package conf
 
 type SchedulerAppConf struct {
-	WorkersNum int `yaml:"workersNum"`
-	// 在默认桶数的基础上，每多 200 个任务增加一个桶数
+	WorkersNum             int `yaml:"workersNum"`
 	BucketsNum             int `yaml:"bucketsNum"`
 	TryLockSeconds         int `yaml:"tryLockSeconds"`
 	TryLockGapMilliSeconds int `yaml:"tryLockGapMilliSeconds"`

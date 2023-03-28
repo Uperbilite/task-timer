@@ -11,10 +11,6 @@ import (
 	dao "github.com/uperbilite/task-timer/dao/task"
 )
 
-type taskDAO interface {
-	GetTasks(ctx context.Context, opts ...dao.Option) ([]*po.Task, error)
-}
-
 type TaskService struct {
 	confProvider *conf.SchedulerAppConfProvider
 	cache        *dao.TaskCache
@@ -51,4 +47,8 @@ func (t *TaskService) GetTasksByTime(ctx context.Context, key string, bucket int
 	}
 
 	return vo.NewTasks(validTask), nil
+}
+
+type taskDAO interface {
+	GetTasks(ctx context.Context, opts ...dao.Option) ([]*po.Task, error)
 }

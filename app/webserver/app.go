@@ -2,6 +2,7 @@ package webserver
 
 import (
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 	"sync"
 
@@ -39,7 +40,7 @@ func NewServer(timer *TimerApp, task *TaskApp, confProvider *conf.WebServerAppCo
 	s.RegisterMockRouter()
 	s.RegisterTimerRouter()
 	s.RegisterTaskRouter()
-
+	s.RegisterMonitorRouter()
 	return &s
 }
 
@@ -80,5 +81,11 @@ func (s *Server) RegisterMockRouter() {
 		}{
 			Word: "hello world!",
 		})
+	})
+}
+
+func (s *Server) RegisterMonitorRouter() {
+	s.engine.Any("/metrics", func(ctx *gin.Context) {
+		promhttp.Handler().ServeHTTP(ctx.Writer, ctx.Request)
 	})
 }
