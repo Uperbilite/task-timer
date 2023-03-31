@@ -59,7 +59,7 @@ func (w *Worker) getValidBucket(ctx context.Context) int {
 
 func (w *Worker) handleSlice(ctx context.Context, bucketID int) {
 	now := time.Now()
-	// 为了防止延长锁过期时间失败，开启另一个x
+	// 为了防止延长锁过期时间失败，开启另一个协程处理上一个时间片
 	if err := w.pool.Submit(func() {
 		w.asyncHandleSlice(ctx, now.Add(-time.Minute), bucketID)
 	}); err != nil {

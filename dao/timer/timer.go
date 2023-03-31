@@ -2,6 +2,7 @@ package timer
 
 import (
 	"context"
+	"github.com/uperbilite/task-timer/dao/task"
 
 	"github.com/uperbilite/task-timer/common/model/po"
 	"github.com/uperbilite/task-timer/pkg/mysql"
@@ -49,7 +50,7 @@ func (t *TimerDAO) GetTimers(ctx context.Context, opts ...Option) ([]*po.Timer, 
 	return timers, db.Scan(&timers).Error
 }
 
-func (t *TimerDAO) Count(ctx context.Context, opts ...Option) (int64, error) {
+func (t *TimerDAO) CountTimers(ctx context.Context, opts ...Option) (int64, error) {
 	db := t.client.DB.WithContext(ctx).Model(&po.Timer{})
 	for _, opt := range opts {
 		db = opt(db)
@@ -58,22 +59,7 @@ func (t *TimerDAO) Count(ctx context.Context, opts ...Option) (int64, error) {
 	return cnt, db.Debug().Count(&cnt).Error
 }
 
-func (t *TimerDAO) Transaction(ctx context.Context, do func(ctx context.Context, dao *TimerDAO) error) error {
-	return t.client.Transaction(func(tx *gorm.DB) error {
-		defer func() {
-			if err := recover(); err != nil {
-				tx.Rollback()
-			}
-		}()
-		return do(ctx, NewTimerDAO(mysql.NewClient(tx)))
-	})
-}
-
-func (t *TimerDAO) BatchCreateRecords(ctx context.Context, tasks []*po.Task) error {
-	return t.client.DB.Model(&po.Task{}).WithContext(ctx).CreateInBatches(tasks, len(tasks)).Error
-}
-
-func (t *TimerDAO) DoWithLock(ctx context.Context, id uint, do func(ctx context.Context, dao *TimerDAO, timer *po.Timer) error) error {
+func (t *TimerDAO) DoWithLock(ctx context.Context, id uint, do func(ctx context.Context, timerDAO *TimerDAO, taskDAO *task.TaskDAO, timer *po.Timer) error) error {
 	return t.client.Transaction(func(tx *gorm.DB) error {
 		defer func() {
 			if err := recover(); err != nil {
@@ -82,10 +68,11 @@ func (t *TimerDAO) DoWithLock(ctx context.Context, id uint, do func(ctx context.
 		}()
 
 		var timer po.Timer
+		// 对当前的timer上锁，保证enable与unable的原子性
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").WithContext(ctx).First(&timer, id).Error; err != nil {
 			return err
 		}
 
-		return do(ctx, NewTimerDAO(mysql.NewClient(tx)), &timer)
+		return do(ctx, NewTimerDAO(mysql.NewClient(tx)), task.NewTaskDAO(mysql.NewClient(tx)), &timer)
 	})
 }

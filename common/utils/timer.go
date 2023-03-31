@@ -73,5 +73,6 @@ func SplitTimeBucket(key string) (time.Time, int, error) {
 
 func GetForwardTwoMigrateStepEnd(cur time.Time, diff time.Duration) time.Time {
 	end := cur.Add(diff)
+	// 向下取整以小时为单位，比如当前时刻是9：55，两小时后是11：55，向下取整为11：00，因此创建的定时任务的区间是9：55到11：00
 	return time.Date(end.Year(), end.Month(), end.Day(), end.Hour(), 0, 0, 0, time.Local)
 }

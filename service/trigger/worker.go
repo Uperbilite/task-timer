@@ -6,9 +6,9 @@ import (
 	"github.com/uperbilite/task-timer/common/conf"
 	"github.com/uperbilite/task-timer/common/model/vo"
 	"github.com/uperbilite/task-timer/common/utils"
-	"github.com/uperbilite/task-timer/pkg/concurrency"
 	"github.com/uperbilite/task-timer/pkg/pool"
 	"github.com/uperbilite/task-timer/service/executor"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,54 +43,47 @@ func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) e
 	}
 	endTime := startTime.Add(time.Minute)
 
-	conf := w.confProvider.Get()
+	config := w.confProvider.Get()
 
-	ticker := time.NewTicker(time.Duration(conf.ZRangeGapSeconds) * time.Second)
+	ticker := time.NewTicker(time.Duration(config.ZRangeGapSeconds) * time.Second)
 	defer ticker.Stop()
 
-	size := int(time.Minute/(time.Duration(conf.ZRangeGapSeconds)*time.Second)) + 1
-	notifier := concurrency.NewSafeChan(size)
-	defer notifier.Close()
+	size := int(time.Minute/(time.Duration(config.ZRangeGapSeconds)*time.Second)) + 1
+	notifier := make(chan interface{}, size)
+	defer close(notifier)
 
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(conf.ZRangeGapSeconds)*time.Second)); err != nil {
-			notifier.Put(err)
+		if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second)); err != nil {
+			notifier <- err
 		}
 	}()
 
 	for range ticker.C {
 		select {
-		case e := <-notifier.GetChan():
+		case e := <-notifier:
 			err, _ = e.(error)
 			return err
 		default:
 		}
 
-		if startTime = startTime.Add(time.Duration(conf.ZRangeGapSeconds) * time.Second); startTime.Equal(endTime) || startTime.After(endTime) {
+		if startTime = startTime.Add(time.Duration(config.ZRangeGapSeconds) * time.Second); startTime.Equal(endTime) || startTime.After(endTime) {
 			break
 		}
 
 		wg.Add(1)
 		go func(startTime time.Time) {
 			defer wg.Done()
-			if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(conf.ZRangeGapSeconds)*time.Second)); err != nil {
-				notifier.Put(err)
+			if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second)); err != nil {
+				notifier <- err
 			}
 		}(startTime)
 	}
 
 	wg.Wait()
-
-	select {
-	case e := <-notifier.GetChan():
-		err, _ = e.(error)
-		return err
-	default:
-	}
 
 	// 延长锁的过期时间用于真正执行任务
 	ack()
@@ -112,7 +105,9 @@ func (w *Worker) handleBatch(ctx context.Context, key string, start, end time.Ti
 	for _, task := range tasks {
 		task := task
 		if err := w.pool.Submit(func() {
-			w.executor.Work(ctx, utils.UnionTimerIDUnix(task.TimerID, task.RunTimer.UnixMilli()))
+			if err := w.executor.Work(ctx, utils.UnionTimerIDUnix(task.TimerID, task.RunTimer.UnixMilli())); err != nil {
+				log.Printf("Executor work failed, err: %v\n", err)
+			}
 		}); err != nil {
 			return err
 		}

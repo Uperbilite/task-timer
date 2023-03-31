@@ -70,6 +70,7 @@ func (w *Worker) executeAndPostProcess(ctx context.Context, timerID uint, unix i
 		return nil
 	}
 
+	// 获得实际执行时间，用于计算任务执行延时
 	execTime := time.Now()
 	resp, err := w.execute(ctx, timer)
 
@@ -119,8 +120,8 @@ func (w *Worker) postProcess(ctx context.Context, resp map[string]interface{}, e
 	return w.taskDAO.UpdateTask(ctx, task)
 }
 
-func (w *Worker) reportMonitorData(app string, expectExecTimeUnix int64, acutalExecTime time.Time) {
+func (w *Worker) reportMonitorData(app string, expectExecTimeUnix int64, actualExecTime time.Time) {
 	w.reporter.ReportExecRecord(app)
 	// 上报毫秒
-	w.reporter.ReportTimerDelayRecord(app, float64(acutalExecTime.UnixMilli()-expectExecTimeUnix))
+	w.reporter.ReportTimerDelayRecord(app, float64(actualExecTime.UnixMilli()-expectExecTimeUnix))
 }

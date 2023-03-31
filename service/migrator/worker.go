@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"time"
 
 	mconf "github.com/uperbilite/task-timer/common/conf"
@@ -58,12 +59,14 @@ func (w *Worker) Start(ctx context.Context) error {
 			continue
 		}
 
+		// 每隔两小时执行一次迁移过程
 		_ = locker.ExpireLock(ctx, int64(conf.MigrateSuccessExpireMinutes)*int64(time.Minute/time.Second))
 	}
 	return nil
 }
 
 func (w *Worker) migrate(ctx context.Context) error {
+	log.Printf("Start migrate from timer to task")
 	timers, err := w.timerDAO.GetTimers(ctx, timerdao.WithStatus(int32(consts.Enabled.ToInt())))
 	if err != nil {
 		return err
@@ -71,11 +74,13 @@ func (w *Worker) migrate(ctx context.Context) error {
 
 	conf := w.appConfigProvider.Get()
 	now := time.Now()
-	start, end := utils.GetStartHour(now.Add(time.Duration(conf.MigrateStepMinutes)*time.Minute)), utils.GetStartHour(now.Add(2*time.Duration(conf.MigrateStepMinutes)*time.Minute))
+	start := utils.GetStartHour(now.Add(time.Duration(conf.MigrateStepMinutes) * time.Minute))
+	end := utils.GetStartHour(now.Add(2 * time.Duration(conf.MigrateStepMinutes) * time.Minute))
 	// 迁移可以慢慢来，不着急
 	for _, timer := range timers {
 		nexts, _ := w.cronParser.NextsBetween(timer.Cron, start, end)
-		w.timerDAO.BatchCreateRecords(ctx, timer.BatchTasksFromTimer(nexts))
+		log.Printf("Migrate timer %d, task from %v to %v", timer.ID, start, end)
+		w.taskDAO.BatchCreateTasks(ctx, timer.BatchTasksFromTimer(nexts))
 		time.Sleep(5 * time.Second)
 	}
 
@@ -83,12 +88,12 @@ func (w *Worker) migrate(ctx context.Context) error {
 }
 
 func (w *Worker) migrateToCache(ctx context.Context, start, end time.Time) error {
+	log.Println("Start migrate from task to cache.")
 	// 迁移完成后，将所有添加的 task 取出，添加到 redis 当中
 	tasks, err := w.taskDAO.GetTasks(ctx, taskdao.WithStartTime(start), taskdao.WithEndTime(end))
 	if err != nil {
 		// TODO: log err
 		return err
 	}
-	// log.InfoContext(ctx, "migrator batch get tasks susccess")
 	return w.taskCache.BatchCreateTasks(ctx, tasks, start, end)
 }

@@ -48,3 +48,7 @@ func (t *TaskDAO) Count(ctx context.Context, opts ...Option) (int64, error) {
 	var cnt int64
 	return cnt, db.Count(&cnt).Error
 }
+
+func (t *TaskDAO) BatchCreateTasks(ctx context.Context, tasks []*po.Task) error {
+	return t.client.DB.Model(&po.Task{}).WithContext(ctx).CreateInBatches(tasks, len(tasks)).Error
+}

@@ -21,20 +21,6 @@ func NewTaskCache(client *redis.Client, confProvider *conf.SchedulerAppConfProvi
 	return &TaskCache{client: client, confProvider: confProvider}
 }
 
-func (t *TaskCache) BatchCreateBucket(ctx context.Context, cntByMins []*po.MinuteTaskCnt, end time.Time) error {
-	conf := t.confProvider.Get()
-
-	expireSeconds := int64(time.Until(end) / time.Second)
-	commands := make([]*redis.Command, 0, 2*len(cntByMins))
-	for _, detail := range cntByMins {
-		commands = append(commands, redis.NewSetCommand(utils.GetBucketCntKey(detail.Minute), conf.BucketsNum+int(detail.Cnt)/200))
-		commands = append(commands, redis.NewExpireCommand(utils.GetBucketCntKey(detail.Minute), expireSeconds))
-	}
-
-	_, err := t.client.Transaction(ctx, commands...)
-	return err
-}
-
 func (t *TaskCache) BatchCreateTasks(ctx context.Context, tasks []*po.Task, start, end time.Time) error {
 	if len(tasks) == 0 {
 		return nil

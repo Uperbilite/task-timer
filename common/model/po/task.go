@@ -20,8 +20,3 @@ type Task struct {
 func (t *Task) TableName() string {
 	return "task"
 }
-
-type MinuteTaskCnt struct {
-	Minute string `gorm:"column:minute"`
-	Cnt    int64  `gorm:"column:cnt"`
-}
