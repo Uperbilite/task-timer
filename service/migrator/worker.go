@@ -66,7 +66,6 @@ func (w *Worker) Start(ctx context.Context) error {
 }
 
 func (w *Worker) migrate(ctx context.Context) error {
-	log.Printf("Start migrate from timer to task")
 	timers, err := w.timerDAO.GetTimers(ctx, timerdao.WithStatus(int32(consts.Enabled.ToInt())))
 	if err != nil {
 		return err
@@ -79,8 +78,10 @@ func (w *Worker) migrate(ctx context.Context) error {
 	// 迁移可以慢慢来，不着急
 	for _, timer := range timers {
 		nexts, _ := w.cronParser.NextsBetween(timer.Cron, start, end)
-		log.Printf("Migrate timer %d, task from %v to %v", timer.ID, start, end)
-		w.taskDAO.BatchCreateTasks(ctx, timer.BatchTasksFromTimer(nexts))
+		if err := w.taskDAO.BatchCreateTasks(ctx, timer.BatchTasksFromTimer(nexts)); err != nil {
+			log.Printf("migrator batch create records for timer: %d failed, err: %v", timer.ID, err)
+			return err
+		}
 		time.Sleep(5 * time.Second)
 	}
 
@@ -88,11 +89,10 @@ func (w *Worker) migrate(ctx context.Context) error {
 }
 
 func (w *Worker) migrateToCache(ctx context.Context, start, end time.Time) error {
-	log.Println("Start migrate from task to cache.")
 	// 迁移完成后，将所有添加的 task 取出，添加到 redis 当中
 	tasks, err := w.taskDAO.GetTasks(ctx, taskdao.WithStartTime(start), taskdao.WithEndTime(end))
 	if err != nil {
-		// TODO: log err
+		log.Printf("migrator batch create cache failed, err: %v", err)
 		return err
 	}
 	return w.taskCache.BatchCreateTasks(ctx, tasks, start, end)

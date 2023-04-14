@@ -49,6 +49,7 @@ func (t *TimerService) Start(ctx context.Context) {
 				}
 
 				go func() {
+					// 第三级缓存，使用map缓存时间片内的timer定义
 					start := time.Now()
 					t.timers, _ = t.getTimersByTime(ctx, start, start.Add(time.Duration(stepMinutes)*time.Minute))
 				}()
@@ -77,6 +78,7 @@ func (t *TimerService) getTimersByTime(ctx context.Context, start, end time.Time
 }
 
 func getTimerIDs(tasks []*po.Task) []uint {
+	// set对所有task的timer id去重
 	timerIDSet := make(map[uint]struct{})
 	for _, task := range tasks {
 		if _, ok := timerIDSet[task.TimerID]; ok {
@@ -109,6 +111,7 @@ func (t *TimerService) GetTimer(ctx context.Context, id uint) (*vo.Timer, error)
 		return vTimer, nil
 	}
 
+	// map缓存没有则去db查
 	timer, err := t.timerDAO.GetTimer(ctx, timerdao.WithID(id))
 	if err != nil {
 		return nil, err

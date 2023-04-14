@@ -56,19 +56,15 @@ func (w *Worker) Start(ctx context.Context) {
 func (w *Worker) reportUnexecedTasksCnt(ctx context.Context, minute time.Time) {
 	unexecedTasksCnt, err := w.taskDAO.Count(ctx, taskdao.WithStartTime(minute.Add(-time.Minute)), taskdao.WithEndTime(minute), taskdao.WithStatus(int32(consts.NotRunned)))
 	if err != nil {
-		// log.ErrorContextf(ctx, "[monitor] get unexeced tasks cnt failed, err: %v", err)
 		return
 	}
 	w.reporter.ReportTimerUnexecedRecord(float64(unexecedTasksCnt))
-	// log.InfoContextf(ctx, "[monitor] report unexeced tasks cnt success, cnt: %d", unexecedTasksCnt)
 }
 
 func (w *Worker) reportEnabledTimersCnt(ctx context.Context) {
 	enabledTimerCnt, err := w.timerDAO.CountTimers(ctx, timerdao.WithStatus(int32(consts.Enabled)))
 	if err != nil {
-		// log.ErrorContextf(ctx, "[monitor] get enabled timer cnt failed, err: %v", err)
 		return
 	}
 	w.reporter.ReportTimerEnabledRecord(float64(enabledTimerCnt))
-	// log.InfoContextf(ctx, "[monitor] report enabled timer cnt success, cnt: %d", enabledTimerCnt)
 }

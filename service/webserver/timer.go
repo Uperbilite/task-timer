@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/uperbilite/task-timer/pkg/mysql"
-	"log"
 	"sort"
 	"time"
 
@@ -108,7 +107,6 @@ func (t *TimerService) EnableTimer(ctx context.Context, app string, id uint) err
 		}
 
 		// 执行时机加入数据库
-		log.Printf("Create task in mysql when enable timer %d, from %v to %v\n", timer.ID, start, end)
 		tasks := timer.BatchTasksFromTimer(executeTimes)
 		// 基于 timer_id + run_timer 唯一键，保证任务不被重复插入
 		// 由于此前可能插入过任务，所以这里忽略重复插入的报错
@@ -117,13 +115,11 @@ func (t *TimerService) EnableTimer(ctx context.Context, app string, id uint) err
 		}
 
 		// 执行时机加入 redis 跳表
-		log.Printf("Create task in redis when enable timer %d\n, from %v to %v", timer.ID, start, end)
 		if err := t.taskCache.BatchCreateTasks(ctx, tasks, start, end); err != nil {
 			return err
 		}
 
 		// 修改 timer 状态为激活态
-		log.Printf("Timer %d status enable", timer.ID)
 		timer.Status = consts.Enabled.ToInt()
 		return timerDAO.UpdateTimer(ctx, timer)
 	}
@@ -145,7 +141,6 @@ func (t *TimerService) UnableTimer(ctx context.Context, app string, id uint) err
 		}
 
 		// 修改 timer 状态为未激活态
-		log.Printf("Timer %d status unable", timer.ID)
 		timer.Status = consts.Unabled.ToInt()
 		return timerDAO.UpdateTimer(ctx, timer)
 	}

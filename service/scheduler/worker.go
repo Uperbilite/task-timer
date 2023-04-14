@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/uperbilite/task-timer/common/conf"
@@ -36,7 +37,6 @@ func (w *Worker) Start(ctx context.Context) error {
 	for range ticker.C {
 		select {
 		case <-ctx.Done():
-			// TODO: log
 			return nil
 		default:
 		}
@@ -47,13 +47,12 @@ func (w *Worker) Start(ctx context.Context) error {
 }
 
 func (w *Worker) handleSlices(ctx context.Context) {
-	for i := 0; i < w.getValidBucket(ctx); i++ {
+	for i := 0; i < w.getValidBucket(); i++ {
 		w.handleSlice(ctx, i)
 	}
 }
 
-// 禁用动态分桶能力
-func (w *Worker) getValidBucket(ctx context.Context) int {
+func (w *Worker) getValidBucket() int {
 	return w.appConfProvider.Get().BucketsNum
 }
 
@@ -63,12 +62,12 @@ func (w *Worker) handleSlice(ctx context.Context, bucketID int) {
 	if err := w.pool.Submit(func() {
 		w.asyncHandleSlice(ctx, now.Add(-time.Minute), bucketID)
 	}); err != nil {
-		// TODO: log
+		log.Printf("[handle slice] submit task failed, err: %v", err)
 	}
 	if err := w.pool.Submit(func() {
 		w.asyncHandleSlice(ctx, now, bucketID)
 	}); err != nil {
-		// TODO: log
+		log.Printf("[handle slice] submit task failed, err: %v", err)
 	}
 }
 
@@ -81,10 +80,14 @@ func (w *Worker) asyncHandleSlice(ctx context.Context, t time.Time, bucketID int
 
 	// 延长锁过期时间
 	ack := func() {
-		locker.ExpireLock(ctx, int64(w.appConfProvider.Get().SuccessExpireSeconds))
+		if err := locker.ExpireLock(ctx, int64(w.appConfProvider.Get().SuccessExpireSeconds)); err != nil {
+			log.Printf("expire lock failed, lock key: %s, err: %v", utils.GetTimeBucketLockKey(t, bucketID), err)
+		}
 	}
 
-	w.trigger.Work(ctx, utils.GetSliceMsgKey(t, bucketID), ack)
+	if err := w.trigger.Work(ctx, utils.GetSliceMsgKey(t, bucketID), ack); err != nil {
+		log.Printf("trigger work failed, err: %v", err)
+	}
 }
 
 // 声明成接口d
