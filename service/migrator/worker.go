@@ -50,6 +50,7 @@ func (w *Worker) Start(ctx context.Context) error {
 		default:
 		}
 
+		// 保证同一时刻只有一个机器执行迁移过程
 		locker := w.lockService.GetDistributionLock(utils.GetMigratorLockKey(utils.GetStartHour(time.Now())))
 		if err := locker.Lock(ctx, int64(conf.MigrateTryLockMinutes)*int64(time.Minute/time.Second)); err != nil {
 			continue

@@ -48,38 +48,21 @@ func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) e
 	ticker := time.NewTicker(time.Duration(config.ZRangeGapSeconds) * time.Second)
 	defer ticker.Stop()
 
-	size := int(time.Minute/(time.Duration(config.ZRangeGapSeconds)*time.Second)) + 1
-	notifier := make(chan interface{}, size)
-	defer close(notifier)
-
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second)); err != nil {
-			notifier <- err
-		}
+		w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second))
 	}()
 
 	for range ticker.C {
-		select {
-		case e := <-notifier:
-			err, _ = e.(error)
-			return err
-		default:
-		}
-
 		if startTime = startTime.Add(time.Duration(config.ZRangeGapSeconds) * time.Second); startTime.Equal(endTime) || startTime.After(endTime) {
 			break
 		}
 
 		wg.Add(1)
 		go func(startTime time.Time) {
-			defer wg.Done()
-			if err := w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second)); err != nil {
-				notifier <- err
-			}
+			w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second))
 		}(startTime)
 	}
 
