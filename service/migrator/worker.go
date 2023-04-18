@@ -44,6 +44,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	defer ticker.Stop()
 
 	for range ticker.C {
+		log.Printf("migrator ticking...")
 		select {
 		case <-ctx.Done():
 			return nil
@@ -53,10 +54,12 @@ func (w *Worker) Start(ctx context.Context) error {
 		// 保证同一时刻只有一个机器执行迁移过程
 		locker := w.lockService.GetDistributionLock(utils.GetMigratorLockKey(utils.GetStartHour(time.Now())))
 		if err := locker.Lock(ctx, int64(conf.MigrateTryLockMinutes)*int64(time.Minute/time.Second)); err != nil {
+			log.Printf("migrator get lock failed, key: %s, err: %v", utils.GetMigratorLockKey(utils.GetStartHour(time.Now())), err)
 			continue
 		}
 
 		if err := w.migrate(ctx); err != nil {
+			log.Printf("migrate failed, err: %v", err)
 			continue
 		}
 

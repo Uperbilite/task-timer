@@ -37,6 +37,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	for range ticker.C {
 		select {
 		case <-ctx.Done():
+			log.Printf("scheduler stopped")
 			return nil
 		default:
 		}
@@ -75,8 +76,11 @@ func (w *Worker) asyncHandleSlice(ctx context.Context, t time.Time, bucketID int
 	// 设置锁过期时间
 	locker := w.lockService.GetDistributionLock(utils.GetTimeBucketLockKey(t, bucketID))
 	if err := locker.Lock(ctx, int64(w.appConfProvider.Get().TryLockSeconds)); err != nil {
+		// log.Printf("get lock failed, err: %v, key: %s", err, utils.GetTimeBucketLockKey(t, bucketID))
 		return
 	}
+
+	// log.Printf("get scheduler lock success, key: %s", utils.GetTimeBucketLockKey(t, bucketID))
 
 	// 延长锁过期时间
 	ack := func() {

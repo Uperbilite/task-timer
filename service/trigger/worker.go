@@ -52,6 +52,7 @@ func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) e
 
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second))
 	}()
 
@@ -62,6 +63,7 @@ func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) e
 
 		wg.Add(1)
 		go func(startTime time.Time) {
+			defer wg.Done()
 			w.handleBatch(ctx, minuteBucketKey, startTime, startTime.Add(time.Duration(config.ZRangeGapSeconds)*time.Second))
 		}(startTime)
 	}
@@ -70,6 +72,7 @@ func (w *Worker) Work(ctx context.Context, minuteBucketKey string, ack func()) e
 
 	// 延长锁的过期时间用于真正执行任务
 	ack()
+	// log.Printf("ack success, key: %s", minuteBucketKey)
 
 	return nil
 }

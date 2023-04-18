@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/uperbilite/task-timer/pkg/prometheus"
+	"log"
 	nethttp "net/http"
 	"strings"
 	"time"
@@ -47,10 +48,12 @@ func (w *Worker) Work(ctx context.Context, timerIDUnixKey string) error {
 	}
 
 	if exist, err := w.bloomFilter.Exist(ctx, utils.GetTaskBloomFilterKey(utils.GetDayStr(time.UnixMilli(unix))), timerIDUnixKey); err != nil || exist {
+		log.Printf("bloom filter check failed, start to check db, bloom key: %s, timerIDUnixKey: %s, err: %v, exist: %t", utils.GetTaskBloomFilterKey(utils.GetDayStr(time.UnixMilli(unix))), timerIDUnixKey, err, exist)
 		// 查库判断定时器状态
 		task, err := w.taskDAO.GetTask(ctx, taskdao.WithTimerID(timerID), taskdao.WithRunTimer(time.UnixMilli(unix)))
 		if err == nil && task.Status != consts.NotRunned.ToInt() {
 			// 重复执行的任务
+			log.Printf("task is already executed, timerID: %d, exec_time: %v", timerID, task.RunTimer)
 			return nil
 		}
 	}
@@ -67,6 +70,7 @@ func (w *Worker) executeAndPostProcess(ctx context.Context, timerID uint, unix i
 
 	// 定时器已经处于去激活态，则无需处理任务
 	if timer.Status != consts.Enabled {
+		log.Printf("timer has alread been unabled, timerID: %d", timerID)
 		return nil
 	}
 
@@ -101,7 +105,9 @@ func (w *Worker) execute(ctx context.Context, timer *vo.Timer) (map[string]inter
 func (w *Worker) postProcess(ctx context.Context, resp map[string]interface{}, execErr error, app string, timerID uint, unix int64, execTime time.Time) error {
 	go w.reportMonitorData(app, unix, execTime)
 
-	w.bloomFilter.Set(ctx, utils.GetTaskBloomFilterKey(utils.GetDayStr(time.UnixMilli(unix))), utils.UnionTimerIDUnix(timerID, unix), consts.BloomFilterKeyExpireSeconds)
+	if err := w.bloomFilter.Set(ctx, utils.GetTaskBloomFilterKey(utils.GetDayStr(time.UnixMilli(unix))), utils.UnionTimerIDUnix(timerID, unix), consts.BloomFilterKeyExpireSeconds); err != nil {
+		log.Printf("set bloom filter failed, key: %s, err: %v", utils.GetTaskBloomFilterKey(utils.GetDayStr(time.UnixMilli(unix))), err)
+	}
 
 	task, err := w.taskDAO.GetTask(ctx, taskdao.WithTimerID(timerID), taskdao.WithRunTimer(time.UnixMilli(unix)))
 	if err != nil {

@@ -108,8 +108,11 @@ func getTimersMap(pTimers []*po.Timer) (map[uint]*vo.Timer, error) {
 
 func (t *TimerService) GetTimer(ctx context.Context, id uint) (*vo.Timer, error) {
 	if vTimer, ok := t.timers[id]; ok {
+		// log.Printf("get timer from local cache failed, timerID: %d", id)
 		return vTimer, nil
 	}
+
+	// log.Printf("get timer from local cache failed, timerID: %d", id)
 
 	// map缓存没有则去db查
 	timer, err := t.timerDAO.GetTimer(ctx, timerdao.WithID(id))
